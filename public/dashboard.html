@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - MP Payment Links</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <div class="header-content">
+                <h1>MP Payment Links</h1>
+                <div class="user-info">
+                    <span id="userEmail"></span>
+                    <button onclick="logout()" class="btn btn-secondary">Sair</button>
+                </div>
+            </div>
+        </header>
+        
+        <main class="dashboard-main">
+            <div class="welcome-card">
+                <h2>Bem-vindo! 👋</h2>
+                <p>Você está logado com sucesso.</p>
+                
+                <div class="user-details">
+                    <h3>Seus dados:</h3>
+                    <div class="detail-item">
+                        <strong>Nome:</strong> <span id="userName"></span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>E-mail:</strong> <span id="userEmailDetail"></span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>ID:</strong> <span id="userId"></span>
+                    </div>
+                </div>
+                
+                <div class="next-steps">
+                    <h3>Próximos passos:</h3>
+                    <p>Em breve você poderá:</p>
+                    <ul>
+                        <li>Configurar suas credenciais do Mercado Pago</li>
+                        <li>Criar links de pagamento personalizados</li>
+                        <li>Acompanhar seus pagamentos em tempo real</li>
+                        <li>Gerenciar sua loja virtual</li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="js/auth.js"></script>
+    <script>
+        // Check authentication on page load
+        checkAuth(true);
+        
+        // Load user data
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        
+        // Update UI with user information
+        document.getElementById('userEmail').textContent = user.email || 'Usuário';
+        document.getElementById('userName').textContent = user.name || 'Nome não disponível';
+        document.getElementById('userEmailDetail').textContent = user.email || 'E-mail não disponível';
+        document.getElementById('userId').textContent = user.id || 'ID não disponível';
+    </script>
+</body>
+</html>
