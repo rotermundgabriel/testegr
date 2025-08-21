@@ -1,4 +1,10 @@
 // src/app.js
+const { updatePaymentLinksTable } = require('./services/database-init');
+
+// Atualizar banco automaticamente ao iniciar
+console.log('🔄 Verificando atualizações do banco...');
+updatePaymentLinksTable();
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
