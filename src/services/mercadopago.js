@@ -124,7 +124,7 @@ async function createPaymentLink(params) {
       preferenceId: response.id,
       initPoint: response.init_point,
       sandboxInitPoint: response.sandbox_init_point,
-      externalReference: response.external_reference,
+     // externalReference: response.external_reference,
       expirationDate: expirationDate.toISOString()
     };
     
@@ -214,7 +214,7 @@ async function getPreference(accessToken, preferenceId) {
     
     return {
       id: response.id,
-      externalReference: response.external_reference,
+     // externalReference: response.external_reference,
       status: response.expires ? 'active' : 'inactive',
       items: response.items,
       payer: response.payer,
