@@ -125,7 +125,7 @@ function createPaymentLinksTableComplete() {
       description TEXT NOT NULL,
       amount REAL NOT NULL,
       status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'expired', 'cancelled')),
-      external_reference TEXT UNIQUE NOT NULL,
+      external_reference TEXT,
       mp_preference_id TEXT,
       init_point TEXT,
       sandbox_init_point TEXT,
