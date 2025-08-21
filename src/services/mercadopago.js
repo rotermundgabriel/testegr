@@ -99,13 +99,12 @@ async function createPaymentLink(params) {
       expires: true,
       expiration_date_to: expirationDate.toISOString(),
       external_reference: externalReference,
-      auto_return: 'approved',
       back_urls: {
-        success: `${process.env.APP_URL || 'http://localhost:3000'}/payment/success`,
-        failure: `${process.env.APP_URL || 'http://localhost:3000'}/payment/failure`,
-        pending: `${process.env.APP_URL || 'http://localhost:3000'}/payment/pending`
+        success: `${process.env.APP_URL || 'https://mercadopago-link-generator-production.up.railway.app'}/payment/success`,
+        failure: `${process.env.APP_URL || 'https://mercadopago-link-generator-production.up.railway.app'}/payment/failure`,
+        pending: `${process.env.APP_URL || 'https://mercadopago-link-generator-production.up.railway.app'}/payment/pending`
       },
-      notification_url: `${process.env.APP_URL || 'http://localhost:3000'}/api/webhooks/mercadopago`,
+      notification_url: `${process.env.APP_URL || 'https://mercadopago-link-generator-production.up.railway.app'}/api/webhooks/mercadopago`,
       statement_descriptor: title ? title.substring(0, 22) : 'Pagamento',
       binary_mode: false // Permite pending status para PIX
     };
