@@ -14,6 +14,7 @@ if (!fs.existsSync(dbPath)) {
 
 // Importa rotas
 const authRoutes = require('./routes/auth');
+const paymentLinksRoutes = require('./routes/payment-links'); // NOVA ROTA ADICIONADA
 // const setupRoutes = require('./routes/setup'); // Descomente quando existir
 // const linksRoutes = require('./routes/links'); // Descomente quando existir
 // const paymentRoutes = require('./routes/payment'); // Descomente quando existir
@@ -49,12 +50,88 @@ app.get('/api/health', (req, res) => {
         success: true,
         message: 'API funcionando',
         timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development'
+        environment: process.env.NODE_ENV || 'development',
+        testMode: process.env.MP_TEST_MODE === 'true' // ADICIONADO
     });
 });
 
 // Rotas de autenticação (register e login são públicas)
 app.use('/api/auth', authRoutes);
+
+// =====================================
+// WEBHOOK DO MERCADO PAGO (público mas validado)
+// =====================================
+
+app.post('/api/webhooks/mercadopago', express.raw({ type: 'application/json' }), async (req, res) => {
+    try {
+        console.log('[Webhook] Notificação recebida do Mercado Pago');
+        
+        const notification = JSON.parse(req.body.toString());
+        console.log('[Webhook] Tipo:', notification.type, 'ID:', notification.data?.id);
+        
+        // Processar notificação de pagamento
+        if (notification.type === 'payment' && notification.data?.id) {
+            const Database = require('better-sqlite3');
+            const db = new Database('database.db');
+            const { checkPaymentStatus } = require('./services/mercadopago');
+            
+            // Buscar link pelo payment_id ou external_reference
+            const stmt = db.prepare(`
+                SELECT pl.*, u.access_token 
+                FROM payment_links pl
+                JOIN users u ON pl.user_id = u.id
+                WHERE pl.payment_id = ? OR pl.external_reference = ?
+            `);
+            
+            const link = stmt.get(notification.data.id, notification.data.id);
+            
+            if (link) {
+                try {
+                    // Verificar status no MP
+                    const paymentStatus = await checkPaymentStatus(
+                        link.access_token,
+                        notification.data.id
+                    );
+                    
+                    // Atualizar se aprovado
+                    if (paymentStatus.status === 'approved' && link.status !== 'paid') {
+                        const updateStmt = db.prepare(`
+                            UPDATE payment_links 
+                            SET 
+                                status = 'paid',
+                                payment_id = ?,
+                                paid_at = ?,
+                                payer_email = ?,
+                                payment_method = ?
+                            WHERE id = ?
+                        `);
+                        
+                        updateStmt.run(
+                            notification.data.id,
+                            paymentStatus.dateApproved || new Date().toISOString(),
+                            paymentStatus.payerEmail,
+                            paymentStatus.paymentMethod,
+                            link.id
+                        );
+                        
+                        console.log('[Webhook] Pagamento aprovado e atualizado:', link.id);
+                    }
+                } catch (error) {
+                    console.error('[Webhook] Erro ao processar pagamento:', error);
+                }
+            }
+            
+            db.close();
+        }
+        
+        // Sempre retornar 200 para o MP
+        res.status(200).send('OK');
+        
+    } catch (error) {
+        console.error('[Webhook] Erro ao processar webhook:', error);
+        res.status(200).send('OK'); // Ainda retorna 200 para evitar retry
+    }
+});
 
 // =====================================
 // ROTAS PROTEGIDAS (requerem autenticação)
@@ -112,6 +189,9 @@ app.get('/api/user/profile', authMiddleware, (req, res) => {
         });
     }
 });
+
+// ROTAS DE PAYMENT LINKS (NOVA)
+app.use('/api/payment-links', authMiddleware, paymentLinksRoutes);
 
 // Futuras rotas protegidas (descomente quando os arquivos existirem)
 // app.use('/api/setup', authMiddleware, setupRoutes);
@@ -172,12 +252,20 @@ app.listen(PORT, () => {
     console.log(`🔑 JWT configurado: ${process.env.JWT_SECRET ? 'Sim' : 'Não'}`);
     console.log(`🔐 Criptografia configurada: ${process.env.ENCRYPTION_KEY ? 'Sim' : 'Não'}`);
     console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`💳 MP Test Mode: ${process.env.MP_TEST_MODE === 'true' ? 'Ativado' : 'Desativado'}`);
     console.log('=====================================');
     console.log('Endpoints disponíveis:');
     console.log('  POST /api/auth/register - Registrar novo usuário com credenciais MP');
     console.log('  POST /api/auth/login - Fazer login');
     console.log('  GET  /api/protected - Rota de teste (requer token)');
     console.log('  GET  /api/user/profile - Perfil do usuário (requer token)');
+    console.log('  ');
+    console.log('  Payment Links (requer autenticação):');
+    console.log('  POST /api/payment-links/create - Criar link de pagamento PIX');
+    console.log('  GET  /api/payment-links - Listar links do usuário');
+    console.log('  GET  /api/payment-links/:id - Buscar link específico');
+    console.log('  PATCH /api/payment-links/:id/cancel - Cancelar link');
+    console.log('  POST /api/payment-links/:id/check-status - Verificar status');
     console.log('=====================================');
 });
 
