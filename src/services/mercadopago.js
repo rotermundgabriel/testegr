@@ -83,13 +83,13 @@ async function createPaymentLink(params) {
         } : undefined
       },
       payment_methods: {
-        excluded_payment_types: [
-          { id: 'credit_card' },
-          { id: 'debit_card' },
-          { id: 'ticket' },
-          { id: 'atm' },
-          { id: 'bank_transfer' }
-        ],
+        //excluded_payment_types: [
+          //{ id: 'credit_card' },
+          //{ id: 'debit_card' },
+          //{ id: 'ticket' },
+          //{ id: 'atm' },
+          //{ id: 'bank_transfer' }
+        //],
         excluded_payment_methods: [
           { id: 'bolbradesco' }
         ],
