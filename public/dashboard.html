@@ -104,7 +104,8 @@
     <script src="/js/utils.js"></script>
     <script>
         // Verificar autenticação
-        if (!checkAuth()) {
+        const token = localStorage.getItem('token');
+        if (!token) {
             window.location.href = '/login';
         }
 
@@ -119,7 +120,7 @@
             try {
                 const response = await fetch('/api/payment-links/stats', {
                     headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('userToken')}`
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
                     }
                 });
 
@@ -142,7 +143,7 @@
             try {
                 const response = await fetch('/api/payment-links?limit=5', {
                     headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('userToken')}`
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
                     }
                 });
 
@@ -156,6 +157,31 @@
                 console.error('Erro:', error);
                 tbody.innerHTML = '<tr><td colspan="6" class="error-cell">Erro ao carregar links</td></tr>';
             }
+        }
+
+        // Truncar texto
+        function truncateText(text, maxLength = 50) {
+            if (!text) return '-';
+            if (text.length <= maxLength) return text;
+            return text.substr(0, maxLength - 3) + '...';
+        }
+
+        // Formatar moeda
+        function formatCurrency(value) {
+            const num = parseFloat(value);
+            if (isNaN(num)) return 'R$ 0,00';
+            return num.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            });
+        }
+
+        // Formatar data
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('pt-BR') + ' ' + 
+                   date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         }
 
         // Exibir links na tabela
@@ -215,13 +241,26 @@
         // Copiar link
         async function copyLink(linkId) {
             const linkUrl = `${window.location.origin}/pay/${linkId}`;
-            await copyToClipboard(linkUrl);
-            showMessage('Link copiado!', 'success');
+            
+            try {
+                await navigator.clipboard.writeText(linkUrl);
+                alert('Link copiado!');
+            } catch (err) {
+                // Fallback para navegadores mais antigos
+                const textArea = document.createElement('textarea');
+                textArea.value = linkUrl;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('Link copiado!');
+            }
         }
 
         // Ver detalhes do link
         function viewLink(linkId) {
-            window.location.href = `/link/${linkId}`;
+            // Por enquanto, apenas copiar o link
+            copyLink(linkId);
         }
 
         // Logout
