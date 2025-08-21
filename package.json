@@ -8,6 +8,7 @@
       "dev": "nodemon src/app.js",
       "init-db": "node src/services/database.js",
       "postinstall": "node src/services/database.js"
+      "test": "node test-integration.js"
    },
    "dependencies": {
       "express": "^4.18.0",
