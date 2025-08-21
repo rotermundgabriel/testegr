@@ -3,66 +3,245 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - MP Payment Links</title>
-    <link rel="stylesheet" href="css/style.css">
+    <title>Dashboard - Mercado Pago Links</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <div class="dashboard-container">
-        <header class="dashboard-header">
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
             <div class="header-content">
-                <h1>MP Payment Links</h1>
-                <div class="user-info">
-                    <span id="userEmail"></span>
-                    <button onclick="logout()" class="btn btn-secondary">Sair</button>
+                <h1>📊 Dashboard</h1>
+                <div class="header-actions">
+                    <span class="user-info" id="userName">Carregando...</span>
+                    <button onclick="logout()" class="btn-logout">Sair</button>
                 </div>
             </div>
         </header>
-        
+
+        <!-- Main Content -->
         <main class="dashboard-main">
-            <div class="welcome-card">
-                <h2>Bem-vindo! 👋</h2>
-                <p>Você está logado com sucesso.</p>
-                
-                <div class="user-details">
-                    <h3>Seus dados:</h3>
-                    <div class="detail-item">
-                        <strong>Nome:</strong> <span id="userName"></span>
-                    </div>
-                    <div class="detail-item">
-                        <strong>E-mail:</strong> <span id="userEmailDetail"></span>
-                    </div>
-                    <div class="detail-item">
-                        <strong>ID:</strong> <span id="userId"></span>
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <!-- Card Criar Link -->
+                <div class="stat-card create-link-featured">
+                    <div class="create-link-content">
+                        <div class="create-icon">➕</div>
+                        <h3>Criar Link de Pagamento</h3>
+                        <p>Gere um novo link para receber pagamentos</p>
+                        <button onclick="window.location.href='/create-link'" class="btn-primary btn-large">
+                            🔗 Novo Link
+                        </button>
                     </div>
                 </div>
+
+                <!-- Card Links Hoje -->
+                <div class="stat-card">
+                    <div class="stat-icon">📅</div>
+                    <div class="stat-content">
+                        <h4>Links Criados Hoje</h4>
+                        <p class="stat-number" id="linksToday">0</p>
+                    </div>
+                </div>
+
+                <!-- Card Total Links -->
+                <div class="stat-card">
+                    <div class="stat-icon">🔗</div>
+                    <div class="stat-content">
+                        <h4>Total de Links</h4>
+                        <p class="stat-number" id="totalLinks">0</p>
+                    </div>
+                </div>
+
+                <!-- Card Links Pagos -->
+                <div class="stat-card">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-content">
+                        <h4>Links Pagos</h4>
+                        <p class="stat-number" id="paidLinks">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Links Table -->
+            <div class="card links-table-card">
+                <div class="card-header">
+                    <h2>📋 Links Recentes</h2>
+                    <button onclick="loadLinks()" class="btn-refresh">🔄 Atualizar</button>
+                </div>
                 
-                <div class="next-steps">
-                    <h3>Próximos passos:</h3>
-                    <p>Em breve você poderá:</p>
-                    <ul>
-                        <li>Configurar suas credenciais do Mercado Pago</li>
-                        <li>Criar links de pagamento personalizados</li>
-                        <li>Acompanhar seus pagamentos em tempo real</li>
-                        <li>Gerenciar sua loja virtual</li>
-                    </ul>
+                <div class="table-container">
+                    <table class="links-table" id="linksTable">
+                        <thead>
+                            <tr>
+                                <th>Título</th>
+                                <th>Valor</th>
+                                <th>Cliente</th>
+                                <th>Status</th>
+                                <th>Criado em</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="linksTableBody">
+                            <tr>
+                                <td colspan="6" class="loading-cell">Carregando links...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="table-footer">
+                    <button onclick="window.location.href='/links'" class="btn-secondary">
+                        Ver Todos os Links →
+                    </button>
                 </div>
             </div>
         </main>
     </div>
-    
-    <script src="js/auth.js"></script>
+
+    <!-- Scripts -->
+    <script src="/js/auth.js"></script>
+    <script src="/js/utils.js"></script>
     <script>
-        // Check authentication on page load
-        checkAuth(true);
-        
-        // Load user data
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        
-        // Update UI with user information
-        document.getElementById('userEmail').textContent = user.email || 'Usuário';
-        document.getElementById('userName').textContent = user.name || 'Nome não disponível';
-        document.getElementById('userEmailDetail').textContent = user.email || 'E-mail não disponível';
-        document.getElementById('userId').textContent = user.id || 'ID não disponível';
+        // Verificar autenticação
+        if (!checkAuth()) {
+            window.location.href = '/login';
+        }
+
+        // Carregar dados do usuário
+        async function loadUserData() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            document.getElementById('userName').textContent = user.name || 'Usuário';
+        }
+
+        // Carregar estatísticas
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/payment-links/stats', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('userToken')}`
+                    }
+                });
+
+                if (response.ok) {
+                    const stats = await response.json();
+                    document.getElementById('linksToday').textContent = stats.today || '0';
+                    document.getElementById('totalLinks').textContent = stats.total || '0';
+                    document.getElementById('paidLinks').textContent = stats.paid || '0';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar estatísticas:', error);
+            }
+        }
+
+        // Carregar links recentes
+        async function loadLinks() {
+            const tbody = document.getElementById('linksTableBody');
+            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">Carregando...</td></tr>';
+
+            try {
+                const response = await fetch('/api/payment-links?limit=5', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('userToken')}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    displayLinks(data.links);
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="error-cell">Erro ao carregar links</td></tr>';
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                tbody.innerHTML = '<tr><td colspan="6" class="error-cell">Erro ao carregar links</td></tr>';
+            }
+        }
+
+        // Exibir links na tabela
+        function displayLinks(links) {
+            const tbody = document.getElementById('linksTableBody');
+            
+            if (!links || links.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="empty-cell">
+                            <p>Nenhum link criado ainda</p>
+                            <button onclick="window.location.href='/create-link'" class="btn-primary">
+                                Criar Primeiro Link
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = links.map(link => `
+                <tr>
+                    <td>${truncateText(link.description, 30)}</td>
+                    <td class="amount">${formatCurrency(link.amount)}</td>
+                    <td>${truncateText(link.customer_name || '-', 20)}</td>
+                    <td>
+                        <span class="status-badge status-${link.status}">
+                            ${getStatusLabel(link.status)}
+                        </span>
+                    </td>
+                    <td>${formatDate(link.created_at)}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button onclick="copyLink('${link.id}')" class="btn-icon" title="Copiar Link">
+                                📋
+                            </button>
+                            <button onclick="viewLink('${link.id}')" class="btn-icon" title="Ver Detalhes">
+                                👁️
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Obter label do status
+        function getStatusLabel(status) {
+            const labels = {
+                'pending': 'Pendente',
+                'paid': 'Pago',
+                'expired': 'Expirado',
+                'cancelled': 'Cancelado'
+            };
+            return labels[status] || status;
+        }
+
+        // Copiar link
+        async function copyLink(linkId) {
+            const linkUrl = `${window.location.origin}/pay/${linkId}`;
+            await copyToClipboard(linkUrl);
+            showMessage('Link copiado!', 'success');
+        }
+
+        // Ver detalhes do link
+        function viewLink(linkId) {
+            window.location.href = `/link/${linkId}`;
+        }
+
+        // Logout
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
+
+        // Inicializar dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            loadUserData();
+            loadStats();
+            loadLinks();
+            
+            // Atualizar a cada 30 segundos
+            setInterval(() => {
+                loadStats();
+                loadLinks();
+            }, 30000);
+        });
     </script>
 </body>
 </html>
