@@ -39,7 +39,7 @@ function updatePaymentLinksTable() {
     
     // Definir colunas necessárias para o sistema de links PIX
     const requiredColumns = [
-      { name: 'external_reference', type: 'TEXT UNIQUE', description: 'Referência externa do MP' },
+      { name: 'external_reference', type: 'TEXT', description: 'Referência externa do MP' },
       { name: 'mp_preference_id', type: 'TEXT', description: 'ID da preference no MP' },
       { name: 'init_point', type: 'TEXT', description: 'URL de pagamento produção' },
       { name: 'sandbox_init_point', type: 'TEXT', description: 'URL de pagamento sandbox' },
