@@ -125,7 +125,6 @@ function createPaymentLinksTableComplete() {
       description TEXT NOT NULL,
       amount REAL NOT NULL,
       status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'expired', 'cancelled')),
-      external_reference TEXT,
       mp_preference_id TEXT,
       init_point TEXT,
       sandbox_init_point TEXT,
@@ -138,6 +137,7 @@ function createPaymentLinksTableComplete() {
       expires_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       paid_at DATETIME,
+      external_reference TEXT,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `;
