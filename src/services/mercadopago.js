@@ -93,8 +93,7 @@ async function createPaymentLink(params) {
         excluded_payment_methods: [
           { id: 'bolbradesco' }
         ],
-        installments: 1,
-        default_payment_method_id: 'pix'
+        installments: 1
       },
       expires: true,
       expiration_date_to: expirationDate.toISOString(),
