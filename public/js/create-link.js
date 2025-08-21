@@ -18,13 +18,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Inicializar formulário
 function initializeForm() {
+    console.log('Inicializando formulário...');
     const form = document.getElementById('createLinkForm');
+    
+    if (!form) {
+        console.error('Formulário não encontrado!');
+        return;
+    }
     
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        console.log('Formulário submetido');
         
         if (validateForm()) {
+            console.log('Formulário válido, criando link...');
             await createPaymentLink();
+        } else {
+            console.log('Formulário inválido');
+            alert('Por favor, preencha todos os campos corretamente');
         }
     });
 
@@ -34,6 +45,8 @@ function initializeForm() {
         input.addEventListener('blur', () => validateField(input));
         input.addEventListener('input', () => clearError(input.id));
     });
+    
+    console.log('Formulário inicializado com sucesso');
 }
 
 // Aplicar máscaras aos campos
@@ -61,6 +74,7 @@ function applyMasks() {
 
 // Validar formulário completo
 function validateForm() {
+    console.log('Validando formulário...');
     const fields = ['title', 'amount', 'clientName', 'clientEmail', 'clientCpf'];
     let isValid = true;
 
@@ -68,9 +82,11 @@ function validateForm() {
         const input = document.getElementById(fieldId);
         if (!validateField(input)) {
             isValid = false;
+            console.log(`Campo inválido: ${fieldId}`);
         }
     });
 
+    console.log('Formulário válido?', isValid);
     return isValid;
 }
 
@@ -241,12 +257,12 @@ async function createPaymentLink() {
                     document.getElementById('amount').value
                         .replace('R
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Erro ao criar link');
-        }
-
         const data = await response.json();
+        console.log('Dados recebidos da API:', data);
+        
+        if (!response.ok) {
+            throw new Error(data.error || data.message || 'Erro ao criar link');
+        }
         
         // Salvar link atual
         currentLink = data;
