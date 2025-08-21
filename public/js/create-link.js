@@ -3,8 +3,15 @@
 // Estado global
 let currentLink = null;
 
-// Inicialização
+// Verificar autenticação ao carregar a página
 document.addEventListener('DOMContentLoaded', () => {
+    // Verificar se o usuário está autenticado
+    const token = localStorage.getItem('token');
+    if (!token) {
+        window.location.href = '/login';
+        return;
+    }
+    
     initializeForm();
     applyMasks();
 });
@@ -226,9 +233,170 @@ async function createPaymentLink() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('userToken')}`
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
             },
-            body: JSON.stringify(formData)
+            body: JSON.stringify({
+                title: document.getElementById('title').value.trim(),
+                amount: parseFloat(
+                    document.getElementById('amount').value
+                        .replace('R
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Erro ao criar link');
+        }
+
+        const data = await response.json();
+        
+        // Salvar link atual
+        currentLink = data;
+        
+        // Mostrar sucesso
+        showSuccessCard(data);
+        
+        // Mostrar mensagem de sucesso
+        showMessage('Link criado com sucesso!', 'success');
+        
+    } catch (error) {
+        console.error('Erro:', error);
+        showMessage(error.message || 'Erro ao criar link. Tente novamente.', 'error');
+    } finally {
+        // Restaurar botão
+        btnText.style.display = 'inline';
+        btnLoading.style.display = 'none';
+        submitBtn.disabled = false;
+    }
+}
+
+// Mostrar card de sucesso
+function showSuccessCard(linkData) {
+    // Esconder formulário
+    document.getElementById('formCard').style.display = 'none';
+    
+    // Preencher dados do link
+    const successCard = document.getElementById('successCard');
+    
+    // URL do link - usar a URL retornada pela API
+    const linkUrl = linkData.link || `${window.location.origin}/pay/${linkData.id}`;
+    document.getElementById('generatedLink').value = linkUrl;
+    
+    // Detalhes
+    const amountValue = linkData.amount || document.getElementById('amount').value;
+    document.getElementById('detailAmount').textContent = 
+        typeof amountValue === 'number' ? formatCurrency(amountValue.toString()) : amountValue;
+    document.getElementById('detailClient').textContent = document.getElementById('clientName').value;
+    document.getElementById('detailTitle').textContent = linkData.title || document.getElementById('title').value;
+    
+    // Mostrar card
+    successCard.style.display = 'block';
+    
+    // Scroll suave para o card
+    successCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// Copiar link
+async function copyLink() {
+    const linkInput = document.getElementById('generatedLink');
+    const linkUrl = linkInput.value;
+    
+    try {
+        await copyToClipboard(linkUrl);
+        
+        // Feedback visual
+        const copyBtn = document.querySelector('.btn-copy');
+        const originalText = copyBtn.innerHTML;
+        copyBtn.innerHTML = '✅ Copiado!';
+        copyBtn.classList.add('copied');
+        
+        setTimeout(() => {
+            copyBtn.innerHTML = originalText;
+            copyBtn.classList.remove('copied');
+        }, 2000);
+        
+        showMessage('Link copiado para a área de transferência!', 'success');
+    } catch (error) {
+        showMessage('Erro ao copiar link', 'error');
+    }
+}
+
+// Gerar QR Code
+function generateQRCode() {
+    const modal = document.getElementById('qrModal');
+    const container = document.getElementById('qrCodeContainer');
+    const linkUrl = document.getElementById('generatedLink').value;
+    
+    // Limpar container
+    container.innerHTML = '';
+    
+    // Gerar QR Code
+    QRCode.toCanvas(linkUrl, {
+        width: 256,
+        margin: 2,
+        color: {
+            dark: '#000000',
+            light: '#FFFFFF'
+        }
+    }, (error, canvas) => {
+        if (error) {
+            console.error(error);
+            showMessage('Erro ao gerar QR Code', 'error');
+            return;
+        }
+        
+        container.appendChild(canvas);
+        modal.style.display = 'flex';
+    });
+}
+
+// Fechar modal do QR Code
+function closeQRModal() {
+    document.getElementById('qrModal').style.display = 'none';
+}
+
+// Criar novo link
+function createNewLink() {
+    // Limpar formulário
+    document.getElementById('createLinkForm').reset();
+    
+    // Limpar erros
+    const errorMessages = document.querySelectorAll('.error-message');
+    errorMessages.forEach(error => {
+        error.textContent = '';
+        error.style.display = 'none';
+    });
+    
+    // Remover classes de erro
+    const inputs = document.querySelectorAll('.error');
+    inputs.forEach(input => input.classList.remove('error'));
+    
+    // Esconder card de sucesso
+    document.getElementById('successCard').style.display = 'none';
+    
+    // Mostrar formulário
+    document.getElementById('formCard').style.display = 'block';
+    
+    // Scroll para o topo
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    // Focar no primeiro campo
+    document.getElementById('title').focus();
+}
+
+// Fechar modal ao clicar fora
+window.onclick = function(event) {
+    const modal = document.getElementById('qrModal');
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
+}, '')
+                        .replace(/\./g, '')
+                        .replace(',', '.')
+                        .trim()
+                ),
+                customer_email: document.getElementById('clientEmail').value.trim(),
+                customer_name: document.getElementById('clientName').value.trim(),
+                customer_cpf: cleanCPF(document.getElementById('clientCpf').value)
+            })
         });
 
         if (!response.ok) {
