@@ -194,7 +194,8 @@ app.get('/api/user/profile', authMiddleware, (req, res) => {
 });
 
 // ROTAS DE PAYMENT LINKS
-app.use('/api/payment-links', paymentLinksRoutes);
+// Adicionar middleware de autenticação diretamente aqui também
+app.use('/api/payment-links', authMiddleware, paymentLinksRoutes);
 
 // Rota de estatísticas para o dashboard
 app.get('/api/payment-links/stats', authMiddleware, async (req, res) => {
