@@ -176,5 +176,17 @@
     <script src="/js/utils.js"></script>
     <script src="/js/create-link.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    
+    <!-- Script de Debug -->
+    <script>
+        // Debug: Verificar se o token existe
+        console.log('Token existe?', !!localStorage.getItem('token'));
+        console.log('User data:', localStorage.getItem('user'));
+        
+        // Debug: Interceptar erros de rede
+        window.addEventListener('unhandledrejection', event => {
+            console.error('Promise rejeitada:', event.reason);
+        });
+    </script>
 </body>
 </html>
