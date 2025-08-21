@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criar Link de Pagamento - Mercado Pago</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>💳 Criar Link de Pagamento</h1>
+                <button onclick="window.location.href='/dashboard'" class="btn-secondary">
+                    ← Voltar ao Dashboard
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Form Card -->
+            <div class="card create-link-card" id="formCard">
+                <form id="createLinkForm">
+                    <!-- Título -->
+                    <div class="form-group">
+                        <label for="title">Título do Pagamento *</label>
+                        <input 
+                            type="text" 
+                            id="title" 
+                            name="title" 
+                            placeholder="Ex: Produto X, Serviço Y"
+                            required
+                            minlength="3"
+                            class="form-input"
+                        >
+                        <span class="error-message" id="titleError"></span>
+                    </div>
+
+                    <!-- Valor -->
+                    <div class="form-group">
+                        <label for="amount">Valor (R$) *</label>
+                        <input 
+                            type="text" 
+                            id="amount" 
+                            name="amount" 
+                            placeholder="0,00"
+                            required
+                            class="form-input currency-input"
+                        >
+                        <span class="error-message" id="amountError"></span>
+                    </div>
+
+                    <!-- Nome do Cliente -->
+                    <div class="form-group">
+                        <label for="clientName">Nome do Cliente *</label>
+                        <input 
+                            type="text" 
+                            id="clientName" 
+                            name="clientName" 
+                            placeholder="Nome completo"
+                            required
+                            class="form-input"
+                        >
+                        <span class="error-message" id="clientNameError"></span>
+                    </div>
+
+                    <!-- Email do Cliente -->
+                    <div class="form-group">
+                        <label for="clientEmail">Email do Cliente *</label>
+                        <input 
+                            type="email" 
+                            id="clientEmail" 
+                            name="clientEmail" 
+                            placeholder="email@exemplo.com"
+                            required
+                            class="form-input"
+                        >
+                        <span class="error-message" id="clientEmailError"></span>
+                    </div>
+
+                    <!-- CPF do Cliente -->
+                    <div class="form-group">
+                        <label for="clientCpf">CPF do Cliente *</label>
+                        <input 
+                            type="text" 
+                            id="clientCpf" 
+                            name="clientCpf" 
+                            placeholder="000.000.000-00"
+                            maxlength="14"
+                            required
+                            class="form-input"
+                        >
+                        <span class="error-message" id="clientCpfError"></span>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary" id="submitBtn">
+                            <span class="btn-text">🔗 Gerar Link de Pagamento</span>
+                            <span class="btn-loading" style="display: none;">
+                                <span class="spinner"></span> Gerando...
+                            </span>
+                        </button>
+                        <button type="button" onclick="window.location.href='/dashboard'" class="btn-secondary">
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Success Card (Hidden initially) -->
+            <div class="card success-card" id="successCard" style="display: none;">
+                <div class="success-header">
+                    <div class="success-icon">✅</div>
+                    <h2>Link Criado com Sucesso!</h2>
+                </div>
+
+                <div class="link-display">
+                    <input 
+                        type="text" 
+                        id="generatedLink" 
+                        readonly 
+                        class="link-input"
+                    >
+                    <div class="link-actions">
+                        <button onclick="copyLink()" class="btn-copy">
+                            📋 Copiar Link
+                        </button>
+                        <button onclick="generateQRCode()" class="btn-qr">
+                            📱 QR Code
+                        </button>
+                    </div>
+                </div>
+
+                <div class="link-details">
+                    <div class="detail-item">
+                        <strong>Valor:</strong> <span id="detailAmount"></span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Cliente:</strong> <span id="detailClient"></span>
+                    </div>
+                    <div class="detail-item">
+                        <strong>Título:</strong> <span id="detailTitle"></span>
+                    </div>
+                </div>
+
+                <div class="success-actions">
+                    <button onclick="createNewLink()" class="btn-primary">
+                        ➕ Criar Novo Link
+                    </button>
+                    <button onclick="window.location.href='/dashboard'" class="btn-secondary">
+                        📊 Ver Todos os Links
+                    </button>
+                </div>
+            </div>
+
+            <!-- QR Code Modal -->
+            <div id="qrModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <span class="close" onclick="closeQRModal()">&times;</span>
+                    <h3>QR Code do Link</h3>
+                    <div id="qrCodeContainer"></div>
+                    <p class="qr-hint">Escaneie ou compartilhe este QR Code</p>
+                </div>
+            </div>
+
+            <!-- Message Toast -->
+            <div id="messageToast" class="message-toast"></div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/js/auth.js"></script>
+    <script src="/js/utils.js"></script>
+    <script src="/js/create-link.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+</body>
+</html>
