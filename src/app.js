@@ -20,10 +20,7 @@ if (!fs.existsSync(dbPath)) {
 
 // Importa rotas
 const authRoutes = require('./routes/auth');
-const paymentLinksRoutes = require('./routes/payment-links'); // NOVA ROTA ADICIONADA
-// const setupRoutes = require('./routes/setup'); // Descomente quando existir
-// const linksRoutes = require('./routes/links'); // Descomente quando existir
-// const paymentRoutes = require('./routes/payment'); // Descomente quando existir
+const paymentLinksRoutes = require('./routes/payment-links');
 
 // Importa middleware de autenticação
 const { authMiddleware } = require('./middleware/auth');
@@ -57,7 +54,7 @@ app.get('/api/health', (req, res) => {
         message: 'API funcionando',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development',
-        testMode: process.env.MP_TEST_MODE === 'true' // ADICIONADO
+        testMode: process.env.MP_TEST_MODE === 'true'
     });
 });
 
@@ -196,19 +193,88 @@ app.get('/api/user/profile', authMiddleware, (req, res) => {
     }
 });
 
-// ROTAS DE PAYMENT LINKS (NOVA)
-app.use('/api/payment-links', authMiddleware, paymentLinksRoutes);
+// ROTAS DE PAYMENT LINKS
+app.use('/api/payment-links', paymentLinksRoutes);
 
-// Futuras rotas protegidas (descomente quando os arquivos existirem)
-// app.use('/api/setup', authMiddleware, setupRoutes);
-// app.use('/api/links', authMiddleware, linksRoutes);
-// app.use('/api/payment', paymentRoutes); // Payment é parcialmente público
+// Rota de estatísticas para o dashboard
+app.get('/api/payment-links/stats', authMiddleware, async (req, res) => {
+    const Database = require('better-sqlite3');
+    const db = new Database(path.join(process.cwd(), 'database.db'));
+    
+    try {
+        const userId = req.userId;
+        
+        // Total de links
+        const totalStmt = db.prepare('SELECT COUNT(*) as count FROM payment_links WHERE user_id = ?');
+        const total = totalStmt.get(userId).count;
+        
+        // Links pagos
+        const paidStmt = db.prepare('SELECT COUNT(*) as count FROM payment_links WHERE user_id = ? AND status = ?');
+        const paid = paidStmt.get(userId, 'paid').count;
+        
+        // Links criados hoje
+        const todayStmt = db.prepare(`
+            SELECT COUNT(*) as count 
+            FROM payment_links 
+            WHERE user_id = ? 
+            AND date(created_at) = date('now')
+        `);
+        const today = todayStmt.get(userId).count;
+        
+        res.json({
+            success: true,
+            total,
+            paid,
+            today
+        });
+        
+    } catch (error) {
+        console.error('Erro ao buscar estatísticas:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao buscar estatísticas'
+        });
+    }
+});
+
+// =====================================
+// ROTAS HTML (páginas do frontend)
+// =====================================
+
+// Páginas específicas que devem ser servidas
+const htmlPages = [
+    'index.html',
+    'login.html', 
+    'register.html',
+    'dashboard.html',
+    'create-link.html'
+];
+
+// Servir páginas HTML específicas
+htmlPages.forEach(page => {
+    const pageName = page.replace('.html', '');
+    if (pageName !== 'index') {
+        app.get(`/${pageName}`, (req, res) => {
+            const filePath = path.join(__dirname, '..', 'public', page);
+            if (fs.existsSync(filePath)) {
+                res.sendFile(filePath);
+            } else {
+                res.status(404).send('Página não encontrada');
+            }
+        });
+    }
+});
+
+// Rota raiz
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
 
 // =====================================
 // TRATAMENTO DE ERROS
 // =====================================
 
-// Rota não encontrada (404)
+// Rota não encontrada (404) para APIs
 app.use('/api/*', (req, res) => {
     res.status(404).json({
         success: false,
@@ -216,9 +282,56 @@ app.use('/api/*', (req, res) => {
     });
 });
 
-// Serve o index.html para rotas do frontend (SPA)
+// Para qualquer outra rota não definida, retornar 404
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'public', 'vendor', 'index.html'));
+    res.status(404).send(`
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>404 - Página não encontrada</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                }
+                .error-container {
+                    text-align: center;
+                    padding: 2rem;
+                    background: white;
+                    border-radius: 12px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                }
+                h1 { color: #667eea; }
+                p { color: #666; margin: 1rem 0; }
+                a {
+                    display: inline-block;
+                    margin-top: 1rem;
+                    padding: 0.75rem 1.5rem;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 8px;
+                    transition: transform 0.3s;
+                }
+                a:hover { transform: translateY(-2px); }
+            </style>
+        </head>
+        <body>
+            <div class="error-container">
+                <h1>404</h1>
+                <p>Página não encontrada</p>
+                <a href="/">Voltar ao início</a>
+            </div>
+        </body>
+        </html>
+    `);
 });
 
 // Error handler global
@@ -260,18 +373,19 @@ app.listen(PORT, () => {
     console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
     console.log(`💳 MP Test Mode: ${process.env.MP_TEST_MODE === 'true' ? 'Ativado' : 'Desativado'}`);
     console.log('=====================================');
-    console.log('Endpoints disponíveis:');
-    console.log('  POST /api/auth/register - Registrar novo usuário com credenciais MP');
+    console.log('Páginas disponíveis:');
+    console.log('  / - Página inicial');
+    console.log('  /login - Login');
+    console.log('  /register - Cadastro');
+    console.log('  /dashboard - Dashboard');
+    console.log('  /create-link - Criar link de pagamento');
+    console.log('=====================================');
+    console.log('Endpoints da API:');
+    console.log('  POST /api/auth/register - Registrar novo usuário');
     console.log('  POST /api/auth/login - Fazer login');
-    console.log('  GET  /api/protected - Rota de teste (requer token)');
-    console.log('  GET  /api/user/profile - Perfil do usuário (requer token)');
-    console.log('  ');
-    console.log('  Payment Links (requer autenticação):');
-    console.log('  POST /api/payment-links/create - Criar link de pagamento PIX');
-    console.log('  GET  /api/payment-links - Listar links do usuário');
-    console.log('  GET  /api/payment-links/:id - Buscar link específico');
-    console.log('  PATCH /api/payment-links/:id/cancel - Cancelar link');
-    console.log('  POST /api/payment-links/:id/check-status - Verificar status');
+    console.log('  GET  /api/payment-links - Listar links');
+    console.log('  POST /api/payment-links/create - Criar link');
+    console.log('  GET  /api/payment-links/stats - Estatísticas');
     console.log('=====================================');
 });
 
