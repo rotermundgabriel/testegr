@@ -35,7 +35,7 @@ function initializeForm() {
             await createPaymentLink();
         } else {
             console.log('Formulário inválido');
-            alert('Por favor, preencha todos os campos corretamente');
+            showMessage('Por favor, preencha todos os campos corretamente', 'error');
         }
     });
 
@@ -224,25 +224,27 @@ async function createPaymentLink() {
 
     try {
         // Pegar valores do formulário
-        const formData = {
-            title: document.getElementById('title').value.trim(),
-            amount: parseFloat(
-                document.getElementById('amount').value
-                    .replace('R$', '')
-                    .replace(/\./g, '')
-                    .replace(',', '.')
-                    .trim()
-            ),
-            payer: {
-                first_name: document.getElementById('clientName').value.trim().split(' ')[0],
-                last_name: document.getElementById('clientName').value.trim().split(' ').slice(1).join(' ') || '',
-                email: document.getElementById('clientEmail').value.trim(),
-                identification: {
-                    type: 'CPF',
-                    number: cleanCPF(document.getElementById('clientCpf').value)
-                }
-            }
+        const title = document.getElementById('title').value.trim();
+        const amountStr = document.getElementById('amount').value
+            .replace('R$', '')
+            .replace(/\./g, '')
+            .replace(',', '.')
+            .trim();
+        const amount = parseFloat(amountStr);
+        const clientEmail = document.getElementById('clientEmail').value.trim();
+        const clientName = document.getElementById('clientName').value.trim();
+        const clientCpf = cleanCPF(document.getElementById('clientCpf').value);
+
+        // Preparar dados para envio
+        const requestData = {
+            title: title,
+            amount: amount,
+            customer_email: clientEmail,
+            customer_name: clientName,
+            customer_cpf: clientCpf
         };
+
+        console.log('Enviando dados para API:', requestData);
 
         // Fazer requisição
         const response = await fetch('/api/payment-links/create', {
@@ -251,15 +253,12 @@ async function createPaymentLink() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             },
-            body: JSON.stringify({
-                title: document.getElementById('title').value.trim(),
-                amount: parseFloat(
-                    document.getElementById('amount').value
-                        .replace('R
+            body: JSON.stringify(requestData)
+        });
 
         const data = await response.json();
-        console.log('Dados recebidos da API:', data);
-        
+        console.log('Resposta da API:', data);
+
         if (!response.ok) {
             throw new Error(data.error || data.message || 'Erro ao criar link');
         }
@@ -274,7 +273,7 @@ async function createPaymentLink() {
         showMessage('Link criado com sucesso!', 'success');
         
     } catch (error) {
-        console.error('Erro:', error);
+        console.error('Erro ao criar link:', error);
         showMessage(error.message || 'Erro ao criar link. Tente novamente.', 'error');
     } finally {
         // Restaurar botão
@@ -286,178 +285,24 @@ async function createPaymentLink() {
 
 // Mostrar card de sucesso
 function showSuccessCard(linkData) {
+    console.log('Mostrando card de sucesso com dados:', linkData);
+    
     // Esconder formulário
     document.getElementById('formCard').style.display = 'none';
     
     // Preencher dados do link
     const successCard = document.getElementById('successCard');
     
-    // URL do link - usar a URL retornada pela API
-    const linkUrl = linkData.link || `${window.location.origin}/pay/${linkData.id}`;
+    // URL do link - usar a URL retornada pela API ou construir uma
+    const linkUrl = linkData.link || linkData.payment_link || `${window.location.origin}/pay/${linkData.id}`;
     document.getElementById('generatedLink').value = linkUrl;
     
     // Detalhes
     const amountValue = linkData.amount || document.getElementById('amount').value;
     document.getElementById('detailAmount').textContent = 
-        typeof amountValue === 'number' ? formatCurrency(amountValue.toString()) : amountValue;
-    document.getElementById('detailClient').textContent = document.getElementById('clientName').value;
+        typeof amountValue === 'number' ? formatCurrency((amountValue * 100).toString()) : amountValue;
+    document.getElementById('detailClient').textContent = linkData.customer_name || document.getElementById('clientName').value;
     document.getElementById('detailTitle').textContent = linkData.title || document.getElementById('title').value;
-    
-    // Mostrar card
-    successCard.style.display = 'block';
-    
-    // Scroll suave para o card
-    successCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-}
-
-// Copiar link
-async function copyLink() {
-    const linkInput = document.getElementById('generatedLink');
-    const linkUrl = linkInput.value;
-    
-    try {
-        await copyToClipboard(linkUrl);
-        
-        // Feedback visual
-        const copyBtn = document.querySelector('.btn-copy');
-        const originalText = copyBtn.innerHTML;
-        copyBtn.innerHTML = '✅ Copiado!';
-        copyBtn.classList.add('copied');
-        
-        setTimeout(() => {
-            copyBtn.innerHTML = originalText;
-            copyBtn.classList.remove('copied');
-        }, 2000);
-        
-        showMessage('Link copiado para a área de transferência!', 'success');
-    } catch (error) {
-        showMessage('Erro ao copiar link', 'error');
-    }
-}
-
-// Gerar QR Code
-function generateQRCode() {
-    const modal = document.getElementById('qrModal');
-    const container = document.getElementById('qrCodeContainer');
-    const linkUrl = document.getElementById('generatedLink').value;
-    
-    // Limpar container
-    container.innerHTML = '';
-    
-    // Gerar QR Code
-    QRCode.toCanvas(linkUrl, {
-        width: 256,
-        margin: 2,
-        color: {
-            dark: '#000000',
-            light: '#FFFFFF'
-        }
-    }, (error, canvas) => {
-        if (error) {
-            console.error(error);
-            showMessage('Erro ao gerar QR Code', 'error');
-            return;
-        }
-        
-        container.appendChild(canvas);
-        modal.style.display = 'flex';
-    });
-}
-
-// Fechar modal do QR Code
-function closeQRModal() {
-    document.getElementById('qrModal').style.display = 'none';
-}
-
-// Criar novo link
-function createNewLink() {
-    // Limpar formulário
-    document.getElementById('createLinkForm').reset();
-    
-    // Limpar erros
-    const errorMessages = document.querySelectorAll('.error-message');
-    errorMessages.forEach(error => {
-        error.textContent = '';
-        error.style.display = 'none';
-    });
-    
-    // Remover classes de erro
-    const inputs = document.querySelectorAll('.error');
-    inputs.forEach(input => input.classList.remove('error'));
-    
-    // Esconder card de sucesso
-    document.getElementById('successCard').style.display = 'none';
-    
-    // Mostrar formulário
-    document.getElementById('formCard').style.display = 'block';
-    
-    // Scroll para o topo
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    
-    // Focar no primeiro campo
-    document.getElementById('title').focus();
-}
-
-// Fechar modal ao clicar fora
-window.onclick = function(event) {
-    const modal = document.getElementById('qrModal');
-    if (event.target === modal) {
-        modal.style.display = 'none';
-    }
-}, '')
-                        .replace(/\./g, '')
-                        .replace(',', '.')
-                        .trim()
-                ),
-                customer_email: document.getElementById('clientEmail').value.trim(),
-                customer_name: document.getElementById('clientName').value.trim(),
-                customer_cpf: cleanCPF(document.getElementById('clientCpf').value)
-            })
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.message || 'Erro ao criar link');
-        }
-
-        const data = await response.json();
-        
-        // Salvar link atual
-        currentLink = data;
-        
-        // Mostrar sucesso
-        showSuccessCard(data);
-        
-        // Mostrar mensagem de sucesso
-        showMessage('Link criado com sucesso!', 'success');
-        
-    } catch (error) {
-        console.error('Erro:', error);
-        showMessage(error.message || 'Erro ao criar link. Tente novamente.', 'error');
-    } finally {
-        // Restaurar botão
-        btnText.style.display = 'inline';
-        btnLoading.style.display = 'none';
-        submitBtn.disabled = false;
-    }
-}
-
-// Mostrar card de sucesso
-function showSuccessCard(linkData) {
-    // Esconder formulário
-    document.getElementById('formCard').style.display = 'none';
-    
-    // Preencher dados do link
-    const successCard = document.getElementById('successCard');
-    
-    // URL do link
-    const linkUrl = `${window.location.origin}/pay/${linkData.id}`;
-    document.getElementById('generatedLink').value = linkUrl;
-    
-    // Detalhes
-    document.getElementById('detailAmount').textContent = formatCurrency(linkData.amount.toString());
-    document.getElementById('detailClient').textContent = document.getElementById('clientName').value;
-    document.getElementById('detailTitle').textContent = linkData.title;
     
     // Mostrar card
     successCard.style.display = 'block';
