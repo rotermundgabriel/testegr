@@ -1,11 +1,11 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
-const { updatePaymentLinksTable } = require('./database-init');
+
 
 // Atualizar banco automaticamente ao iniciar
 console.log('CONFIRMAÇÃO QUE ISSO RODOU');
-updatePaymentLinksTable();
+require('./database-init');
 console.log('CONFIRMAÇÃO QUE ISSO RODOU');
 
 // Caminho do banco de dados (na raiz do projeto)
