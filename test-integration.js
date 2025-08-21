@@ -2,10 +2,9 @@
 // Script para testar se a integração está funcionando
 // Execute com: node test-integration.js
 
-const Database = require('better-sqlite3');
+require('dotenv').config();
 const { generateToken } = require('./src/services/auth');
 const { encryptAccessToken, validateMPAccessToken } = require('./src/utils/crypto');
-require('dotenv').config();
 
 console.log('🧪 Iniciando testes de integração...\n');
 
@@ -31,35 +30,40 @@ if (!envOk) {
 // Teste 2: Verificar banco de dados
 console.log('\n2️⃣ Verificando banco de dados...');
 try {
-  const db = new Database('database.db');
+  // Usar o database.js existente
+  const { db, isReady } = require('./src/services/database');
   
-  // Verificar tabelas essenciais
-  const tables = ['users', 'payment_links'];
-  for (const table of tables) {
-    const exists = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table);
-    if (exists) {
-      console.log(`   ✅ Tabela '${table}' existe`);
-      
-      // Verificar colunas críticas para payment_links
-      if (table === 'payment_links') {
-        const columns = db.prepare(`PRAGMA table_info(payment_links)`).all();
-        const columnNames = columns.map(c => c.name);
+  if (!isReady) {
+    console.log('   ❌ Banco de dados não está pronto');
+  } else {
+    console.log('   ✅ Conexão com banco estabelecida');
+    
+    // Verificar tabelas essenciais
+    const tables = ['users', 'payment_links'];
+    for (const table of tables) {
+      const exists = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table);
+      if (exists) {
+        console.log(`   ✅ Tabela '${table}' existe`);
         
-        const requiredColumns = ['external_reference', 'mp_preference_id', 'customer_email'];
-        for (const col of requiredColumns) {
-          if (columnNames.includes(col)) {
-            console.log(`      ✅ Coluna '${col}' existe`);
-          } else {
-            console.log(`      ❌ Coluna '${col}' NÃO existe - execute npm run init-db`);
+        // Verificar colunas críticas para payment_links
+        if (table === 'payment_links') {
+          const columns = db.prepare(`PRAGMA table_info(payment_links)`).all();
+          const columnNames = columns.map(c => c.name);
+          
+          const requiredColumns = ['external_reference', 'mp_preference_id', 'customer_email'];
+          for (const col of requiredColumns) {
+            if (columnNames.includes(col)) {
+              console.log(`      ✅ Coluna '${col}' existe`);
+            } else {
+              console.log(`      ❌ Coluna '${col}' NÃO existe - execute npm run init-db`);
+            }
           }
         }
+      } else {
+        console.log(`   ❌ Tabela '${table}' NÃO existe - execute npm run init-db`);
       }
-    } else {
-      console.log(`   ❌ Tabela '${table}' NÃO existe - execute npm run init-db`);
     }
   }
-  
-  db.close();
 } catch (error) {
   console.log(`   ❌ Erro ao acessar banco: ${error.message}`);
 }
@@ -137,3 +141,4 @@ console.log('Próximos passos:');
 console.log('1. Execute: npm run init-db (se necessário)');
 console.log('2. Inicie o servidor: npm run dev');
 console.log('3. Teste a criação de links via API\n');
+
