@@ -246,3 +246,117 @@ function smoothScrollTo(elementId) {
         });
     }
 }
+
+/**
+ * Carregar links do usuário
+ * Busca os links de pagamento do usuário na API
+ */
+async function loadLinks() {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('Token não encontrado');
+            return;
+        }
+
+        const response = await fetch('/api/payment-links', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Limitar a 5 links mais recentes para o dashboard
+        const recentLinks = data.links ? data.links.slice(0, 5) : [];
+        
+        // Chamar a função displayLinks que já existe no dashboard.html
+        if (typeof displayLinks === 'function') {
+            displayLinks(recentLinks);
+        }
+        
+        return data.links;
+    } catch (error) {
+        console.error('Erro ao carregar links:', error);
+        
+        // Mostrar mensagem de erro na tabela
+        const tbody = document.getElementById('linksTableBody');
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="error-cell">
+                        <p>Erro ao carregar links</p>
+                        <button onclick="loadLinks()" class="btn-secondary">
+                            Tentar Novamente
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+    }
+}
+
+/**
+ * Carregar estatísticas do dashboard
+ * Busca as estatísticas dos links de pagamento
+ */
+async function loadStats() {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            console.error('Token não encontrado');
+            return;
+        }
+
+        const response = await fetch('/api/payment-links/stats', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const stats = await response.json();
+        
+        // Atualizar os elementos do dashboard com as estatísticas
+        // A API retorna: total, paid, today
+        if (document.getElementById('linksToday')) {
+            document.getElementById('linksToday').textContent = stats.today || '0';
+        }
+        
+        if (document.getElementById('totalLinks')) {
+            document.getElementById('totalLinks').textContent = stats.total || '0';
+        }
+        
+        if (document.getElementById('paidLinks')) {
+            document.getElementById('paidLinks').textContent = stats.paid || '0';
+        }
+        
+        return stats;
+    } catch (error) {
+        console.error('Erro ao carregar estatísticas:', error);
+        
+        // Definir valores padrão em caso de erro
+        if (document.getElementById('linksToday')) {
+            document.getElementById('linksToday').textContent = '0';
+        }
+        
+        if (document.getElementById('totalLinks')) {
+            document.getElementById('totalLinks').textContent = '0';
+        }
+        
+        if (document.getElementById('paidLinks')) {
+            document.getElementById('paidLinks').textContent = '0';
+        }
+    }
+}

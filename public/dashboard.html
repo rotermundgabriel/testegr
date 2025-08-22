@@ -105,15 +105,27 @@
     <script>
         // Verificar autenticação
         const token = localStorage.getItem('token');
-        const userName = localStorage.getItem('userName');
-        const userId = localStorage.getItem('userId');
+        const userStr = localStorage.getItem('user');
+        let userName = 'Usuário';
+        let userId = null;
         
         if (!token) {
             window.location.href = '/';
         }
         
+        // Extrair dados do usuário
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                userName = user.name || user.email || 'Usuário';
+                userId = user.id;
+            } catch (error) {
+                console.error('Erro ao parsear dados do usuário:', error);
+            }
+        }
+        
         // Exibir nome do usuário
-        document.getElementById('userName').textContent = userName || 'Usuário';
+        document.getElementById('userName').textContent = userName;
 
         // =====================================
         // SERVER-SENT EVENTS (SSE) - Notificações em tempo real
