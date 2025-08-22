@@ -105,86 +105,224 @@
     <script>
         // Verificar autenticação
         const token = localStorage.getItem('token');
+        const userName = localStorage.getItem('userName');
+        const userId = localStorage.getItem('userId');
+        
         if (!token) {
-            window.location.href = '/login';
+            window.location.href = '/';
         }
+        
+        // Exibir nome do usuário
+        document.getElementById('userName').textContent = userName || 'Usuário';
 
-        // Carregar dados do usuário
-        async function loadUserData() {
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
-            document.getElementById('userName').textContent = user.name || 'Usuário';
-        }
+        // =====================================
+        // SERVER-SENT EVENTS (SSE) - Notificações em tempo real
+        // =====================================
+        let eventSource = null;
+        let reconnectTimeout = null;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 10;
+        const RECONNECT_DELAY = 3000; // 3 segundos
 
-        // Carregar estatísticas
-        async function loadStats() {
-            try {
-                const response = await fetch('/api/payment-links/stats', {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                });
-
-                if (response.ok) {
-                    const stats = await response.json();
-                    document.getElementById('linksToday').textContent = stats.today || '0';
-                    document.getElementById('totalLinks').textContent = stats.total || '0';
-                    document.getElementById('paidLinks').textContent = stats.paid || '0';
-                }
-            } catch (error) {
-                console.error('Erro ao carregar estatísticas:', error);
+        // Função para conectar ao SSE
+        function connectToSSE() {
+            console.log('[SSE] Conectando ao servidor de eventos...');
+            
+            // Fechar conexão anterior se existir
+            if (eventSource) {
+                eventSource.close();
             }
-        }
-
-        // Carregar links recentes
-        async function loadLinks() {
-            const tbody = document.getElementById('linksTableBody');
-            tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">Carregando...</td></tr>';
-
-            try {
-                const response = await fetch('/api/payment-links?limit=5', {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    displayLinks(data.links);
-                } else {
-                    tbody.innerHTML = '<tr><td colspan="6" class="error-cell">Erro ao carregar links</td></tr>';
-                }
-            } catch (error) {
-                console.error('Erro:', error);
-                tbody.innerHTML = '<tr><td colspan="6" class="error-cell">Erro ao carregar links</td></tr>';
-            }
-        }
-
-        // Truncar texto
-        function truncateText(text, maxLength = 50) {
-            if (!text) return '-';
-            if (text.length <= maxLength) return text;
-            return text.substr(0, maxLength - 3) + '...';
-        }
-
-        // Formatar moeda
-        function formatCurrency(value) {
-            const num = parseFloat(value);
-            if (isNaN(num)) return 'R$ 0,00';
-            return num.toLocaleString('pt-BR', {
-                style: 'currency',
-                currency: 'BRL'
+            
+            // Criar nova conexão SSE
+            eventSource = new EventSource('/api/events', {
+                withCredentials: true
             });
+            
+            // Evento de conexão estabelecida
+            eventSource.addEventListener('connected', (event) => {
+                const data = JSON.parse(event.data);
+                console.log('[SSE] Conectado:', data);
+                reconnectAttempts = 0;
+                
+                // Mostrar notificação de conexão
+                showNotification('✅ Conectado ao servidor', 'success', 3000);
+            });
+            
+            // Evento de atualização de pagamento
+            eventSource.addEventListener('payment_update', (event) => {
+                const data = JSON.parse(event.data);
+                console.log('[SSE] Atualização de pagamento recebida:', data);
+                
+                // Atualizar a linha na tabela se existir
+                updateLinkInTable(data.link);
+                
+                // Atualizar estatísticas
+                loadStats();
+                
+                // Mostrar notificação visual
+                const statusLabel = getStatusLabel(data.status);
+                const statusEmoji = data.status === 'paid' ? '✅' : 
+                                   data.status === 'cancelled' ? '❌' : '⏳';
+                
+                showNotification(
+                    `${statusEmoji} Link "${data.link.description}" - Status: ${statusLabel}`,
+                    data.status === 'paid' ? 'success' : 'info',
+                    5000
+                );
+            });
+            
+            // Evento especial para pagamento completo
+            eventSource.addEventListener('payment_completed', (event) => {
+                const data = JSON.parse(event.data);
+                console.log('[SSE] Pagamento completo:', data);
+                
+                // Tocar som de notificação (opcional)
+                playNotificationSound();
+                
+                // Mostrar notificação especial
+                showNotification(
+                    `🎉 Pagamento Aprovado! ${formatCurrency(data.amount)} - ${data.description}`,
+                    'success',
+                    10000
+                );
+                
+                // Atualizar toda a tabela para garantir sincronização
+                loadLinks();
+                loadStats();
+            });
+            
+            // Evento de erro
+            eventSource.onerror = (error) => {
+                console.error('[SSE] Erro na conexão:', error);
+                eventSource.close();
+                
+                // Tentar reconectar
+                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    reconnectAttempts++;
+                    console.log(`[SSE] Tentando reconectar... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+                    
+                    clearTimeout(reconnectTimeout);
+                    reconnectTimeout = setTimeout(() => {
+                        connectToSSE();
+                    }, RECONNECT_DELAY * reconnectAttempts);
+                } else {
+                    console.error('[SSE] Máximo de tentativas de reconexão atingido');
+                    showNotification('⚠️ Conexão perdida. Recarregue a página.', 'error', 0);
+                }
+            };
+            
+            // Adicionar interceptador para o token de autenticação
+            const originalAddEventListener = eventSource.addEventListener;
+            eventSource.addEventListener = function(type, listener, options) {
+                const wrappedListener = function(event) {
+                    // Adicionar token aos headers se necessário
+                    if (event.lastEventId) {
+                        event.headers = {
+                            'Authorization': `Bearer ${token}`
+                        };
+                    }
+                    return listener.call(this, event);
+                };
+                return originalAddEventListener.call(this, type, wrappedListener, options);
+            };
         }
 
-        // Formatar data
-        function formatDate(dateString) {
-            if (!dateString) return '-';
-            const date = new Date(dateString);
-            return date.toLocaleDateString('pt-BR') + ' ' + 
-                   date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        // Função para mostrar notificações visuais
+        function showNotification(message, type = 'info', duration = 5000) {
+            // Remover notificação anterior se existir
+            const existingNotification = document.querySelector('.notification-toast');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+            
+            // Criar elemento de notificação
+            const notification = document.createElement('div');
+            notification.className = `notification-toast notification-${type}`;
+            notification.innerHTML = `
+                <div class="notification-content">
+                    <span>${message}</span>
+                    <button onclick="this.parentElement.parentElement.remove()" class="notification-close">×</button>
+                </div>
+            `;
+            
+            // Adicionar ao body
+            document.body.appendChild(notification);
+            
+            // Animar entrada
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+            
+            // Remover após duração (se não for 0)
+            if (duration > 0) {
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 300);
+                }, duration);
+            }
         }
 
-        // Exibir links na tabela
+        // Função para tocar som de notificação
+        function playNotificationSound() {
+            try {
+                // Criar elemento de áudio temporário
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZURE');
+                audio.volume = 0.5;
+                audio.play();
+            } catch (error) {
+                console.log('Não foi possível tocar som de notificação:', error);
+            }
+        }
+
+        // Função para atualizar uma linha específica na tabela
+        function updateLinkInTable(link) {
+            const tbody = document.getElementById('linksTableBody');
+            const rows = tbody.querySelectorAll('tr');
+            
+            // Procurar a linha correspondente
+            for (let row of rows) {
+                const linkIdCell = row.querySelector('[data-link-id]');
+                if (linkIdCell && linkIdCell.dataset.linkId === link.id) {
+                    // Atualizar a linha
+                    row.innerHTML = `
+                        <td data-link-id="${link.id}">${truncateText(link.description, 30)}</td>
+                        <td class="amount">${formatCurrency(link.amount)}</td>
+                        <td>${truncateText(link.customer_name || '-', 20)}</td>
+                        <td>
+                            <span class="status-badge status-${link.status}">
+                                ${getStatusLabel(link.status)}
+                            </span>
+                        </td>
+                        <td>${formatDate(link.created_at)}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button onclick="copyLink('${link.id}')" class="btn-icon" title="Copiar Link">
+                                    📋
+                                </button>
+                                <button onclick="viewLink('${link.id}')" class="btn-icon" title="Ver Detalhes">
+                                    👁️
+                                </button>
+                            </div>
+                        </td>
+                    `;
+                    
+                    // Adicionar efeito de destaque
+                    row.classList.add('updated-row');
+                    setTimeout(() => {
+                        row.classList.remove('updated-row');
+                    }, 2000);
+                    
+                    return;
+                }
+            }
+            
+            // Se não encontrou a linha, recarregar toda a tabela
+            loadLinks();
+        }
+
+        // Modificar a função displayLinks para adicionar data-link-id
         function displayLinks(links) {
             const tbody = document.getElementById('linksTableBody');
             
@@ -204,7 +342,7 @@
 
             tbody.innerHTML = links.map(link => `
                 <tr>
-                    <td>${truncateText(link.description, 30)}</td>
+                    <td data-link-id="${link.id}">${truncateText(link.description, 30)}</td>
                     <td class="amount">${formatCurrency(link.amount)}</td>
                     <td>${truncateText(link.customer_name || '-', 20)}</td>
                     <td>
@@ -271,10 +409,19 @@
 
         // Inicializar dashboard
         document.addEventListener('DOMContentLoaded', () => {
-            loadUserData();
             loadStats();
             loadLinks();
             
+            // Conectar ao SSE
+            connectToSSE();
+            
+            // Desconectar SSE ao sair da página
+            window.addEventListener('beforeunload', () => {
+                if (eventSource) {
+                    eventSource.close();
+                }
+            });
+
             // Atualizar a cada 30 segundos
             setInterval(() => {
                 loadStats();

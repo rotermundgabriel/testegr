@@ -25,6 +25,9 @@ const paymentLinksRoutes = require('./routes/payment-links');
 // Importa middleware de autenticação
 const { authMiddleware } = require('./middleware/auth');
 
+// Importar o serviço de eventos SSE
+const eventService = require('./services/events');
+
 // Inicializa o app
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -62,14 +65,23 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 
 // =====================================
-// WEBHOOK DO MERCADO PAGO (público mas validado)
+// WEBHOOK MERCADO PAGO (melhorado)
 // =====================================
-
 app.post('/api/webhooks/mercadopago', express.raw({ type: 'application/json' }), async (req, res) => {
     try {
-        console.log('[Webhook] Notificação recebida do Mercado Pago');
+        console.log('[Webhook] ========== NOVA NOTIFICAÇÃO RECEBIDA ==========');
+        console.log('[Webhook] Headers:', req.headers);
         
+        // Parse do body
         const notification = JSON.parse(req.body.toString());
+        console.log('[Webhook] Payload:', JSON.stringify(notification, null, 2));
+        
+        // Validar estrutura da notificação
+        if (!notification.type || !notification.data) {
+            console.warn('[Webhook] Notificação com estrutura inválida');
+            return res.status(200).send('OK');
+        }
+        
         console.log('[Webhook] Tipo:', notification.type, 'ID:', notification.data?.id);
         
         // Processar notificação de pagamento
@@ -78,61 +90,233 @@ app.post('/api/webhooks/mercadopago', express.raw({ type: 'application/json' }),
             const db = new Database('database.db');
             const { checkPaymentStatus } = require('./services/mercadopago');
             
-            // Buscar link pelo payment_id ou external_reference
-            const stmt = db.prepare(`
-                SELECT pl.*, u.access_token 
-                FROM payment_links pl
-                JOIN users u ON pl.user_id = u.id
-                WHERE pl.payment_id = ? OR pl.external_reference = ?
-            `);
-            
-            const link = stmt.get(notification.data.id, notification.data.id);
-            
-            if (link) {
-                try {
-                    // Verificar status no MP
+            try {
+                // Buscar link pelo payment_id ou external_reference
+                console.log('[Webhook] Buscando link associado ao pagamento:', notification.data.id);
+                
+                const stmt = db.prepare(`
+                    SELECT pl.*, u.access_token 
+                    FROM payment_links pl
+                    JOIN users u ON pl.user_id = u.id
+                    WHERE pl.payment_id = ? 
+                       OR pl.external_reference = ?
+                       OR pl.preference_id = ?
+                `);
+                
+                const link = stmt.get(
+                    notification.data.id, 
+                    notification.data.id,
+                    notification.data.id
+                );
+                
+                if (!link) {
+                    console.warn('[Webhook] Link não encontrado para payment_id:', notification.data.id);
+                    
+                    // Tentar buscar pelo external_reference se fornecido
+                    if (notification.external_reference) {
+                        const altStmt = db.prepare(`
+                            SELECT pl.*, u.access_token 
+                            FROM payment_links pl
+                            JOIN users u ON pl.user_id = u.id
+                            WHERE pl.external_reference = ?
+                        `);
+                        const altLink = altStmt.get(notification.external_reference);
+                        
+                        if (altLink) {
+                            console.log('[Webhook] Link encontrado via external_reference:', notification.external_reference);
+                            Object.assign(link, altLink);
+                        }
+                    }
+                }
+                
+                if (link) {
+                    console.log('[Webhook] Link encontrado:', {
+                        id: link.id,
+                        description: link.description,
+                        status_atual: link.status,
+                        user_id: link.user_id
+                    });
+                    
+                    // Verificar status no Mercado Pago
+                    console.log('[Webhook] Consultando status no Mercado Pago...');
                     const paymentStatus = await checkPaymentStatus(
                         link.access_token,
                         notification.data.id
                     );
                     
-                    // Atualizar se aprovado
-                    if (paymentStatus.status === 'approved' && link.status !== 'paid') {
+                    console.log('[Webhook] Status do pagamento no MP:', {
+                        status: paymentStatus.status,
+                        statusDetail: paymentStatus.statusDetail,
+                        payerEmail: paymentStatus.payerEmail,
+                        amount: paymentStatus.transactionAmount
+                    });
+                    
+                    // Mapear status do MP para status do sistema
+                    let newStatus = link.status;
+                    let statusChanged = false;
+                    
+                    switch(paymentStatus.status) {
+                        case 'approved':
+                            if (link.status !== 'paid') {
+                                newStatus = 'paid';
+                                statusChanged = true;
+                            }
+                            break;
+                        case 'pending':
+                        case 'in_process':
+                            if (link.status !== 'pending') {
+                                newStatus = 'pending';
+                                statusChanged = true;
+                            }
+                            break;
+                        case 'rejected':
+                        case 'cancelled':
+                            if (link.status !== 'cancelled') {
+                                newStatus = 'cancelled';
+                                statusChanged = true;
+                            }
+                            break;
+                    }
+                    
+                    // Atualizar no banco se houve mudança
+                    if (statusChanged) {
+                        console.log('[Webhook] Atualizando status de', link.status, 'para', newStatus);
+                        
                         const updateStmt = db.prepare(`
                             UPDATE payment_links 
                             SET 
-                                status = 'paid',
+                                status = ?,
                                 payment_id = ?,
                                 paid_at = ?,
                                 payer_email = ?,
-                                payment_method = ?
+                                payment_method = ?,
+                                updated_at = CURRENT_TIMESTAMP
                             WHERE id = ?
                         `);
                         
-                        updateStmt.run(
+                        const result = updateStmt.run(
+                            newStatus,
                             notification.data.id,
-                            paymentStatus.dateApproved || new Date().toISOString(),
+                            newStatus === 'paid' ? (paymentStatus.dateApproved || new Date().toISOString()) : null,
                             paymentStatus.payerEmail,
                             paymentStatus.paymentMethod,
                             link.id
                         );
                         
-                        console.log('[Webhook] Pagamento aprovado e atualizado:', link.id);
+                        console.log('[Webhook] Link atualizado:', {
+                            linkId: link.id,
+                            rowsAffected: result.changes,
+                            newStatus: newStatus
+                        });
+                        
+                        // Salvar notificação no banco
+                        const notifStmt = db.prepare(`
+                            INSERT INTO payment_notifications (id, link_id, mp_notification_id, status, data)
+                            VALUES (?, ?, ?, ?, ?)
+                        `);
+                        
+                        const notifId = require('uuid').v4();
+                        notifStmt.run(
+                            notifId,
+                            link.id,
+                            notification.id || notification.data.id,
+                            newStatus,
+                            JSON.stringify({
+                                notification,
+                                paymentStatus,
+                                timestamp: new Date().toISOString()
+                            })
+                        );
+                        
+                        console.log('[Webhook] Notificação salva no banco:', notifId);
+                        
+                        // Enviar notificação em tempo real via SSE
+                        console.log('[Webhook] Enviando notificação SSE para o usuário:', link.user_id);
+                        
+                        // Buscar dados atualizados do link para enviar
+                        const updatedLinkStmt = db.prepare(`
+                            SELECT * FROM payment_links WHERE id = ?
+                        `);
+                        const updatedLink = updatedLinkStmt.get(link.id);
+                        
+                        // Enviar evento SSE para o usuário
+                        eventService.sendToUser(link.user_id.toString(), 'payment_update', {
+                            linkId: link.id,
+                            status: newStatus,
+                            previousStatus: link.status,
+                            paymentId: notification.data.id,
+                            payerEmail: paymentStatus.payerEmail,
+                            amount: paymentStatus.transactionAmount,
+                            paymentMethod: paymentStatus.paymentMethod,
+                            timestamp: new Date().toISOString(),
+                            link: updatedLink
+                        });
+                        
+                        // Se o pagamento foi aprovado, enviar notificação especial
+                        if (newStatus === 'paid') {
+                            eventService.sendToUser(link.user_id.toString(), 'payment_completed', {
+                                linkId: link.id,
+                                description: link.description,
+                                amount: paymentStatus.transactionAmount,
+                                payerEmail: paymentStatus.payerEmail,
+                                payerName: link.customer_name,
+                                timestamp: new Date().toISOString()
+                            });
+                            
+                            console.log('[Webhook] ✅ PAGAMENTO APROVADO! Link:', link.id);
+                        }
+                    } else {
+                        console.log('[Webhook] Status não mudou, mantendo:', link.status);
                     }
-                } catch (error) {
-                    console.error('[Webhook] Erro ao processar pagamento:', error);
+                } else {
+                    console.warn('[Webhook] ⚠️ Link não encontrado para processar pagamento');
                 }
+            } catch (error) {
+                console.error('[Webhook] ❌ Erro ao processar pagamento:', error);
+                console.error('[Webhook] Stack trace:', error.stack);
+                
+                // Ainda assim, salvar a notificação para análise posterior
+                try {
+                    const errorStmt = db.prepare(`
+                        INSERT INTO payment_notifications (id, link_id, mp_notification_id, status, data)
+                        VALUES (?, ?, ?, ?, ?)
+                    `);
+                    
+                    errorStmt.run(
+                        require('uuid').v4(),
+                        'error',
+                        notification.id || notification.data?.id || 'unknown',
+                        'error',
+                        JSON.stringify({
+                            notification,
+                            error: error.message,
+                            stack: error.stack,
+                            timestamp: new Date().toISOString()
+                        })
+                    );
+                } catch (dbError) {
+                    console.error('[Webhook] Erro ao salvar notificação de erro:', dbError);
+                }
+            } finally {
+                db.close();
             }
-            
-            db.close();
+        } else if (notification.type === 'merchant_order') {
+            console.log('[Webhook] Notificação de merchant_order recebida (ignorando por enquanto)');
+        } else {
+            console.log('[Webhook] Tipo de notificação não processado:', notification.type);
         }
         
-        // Sempre retornar 200 para o MP
+        console.log('[Webhook] ========== FIM DO PROCESSAMENTO ==========');
+        
+        // Sempre retornar 200 para o MP não reenviar
         res.status(200).send('OK');
         
     } catch (error) {
-        console.error('[Webhook] Erro ao processar webhook:', error);
-        res.status(200).send('OK'); // Ainda retorna 200 para evitar retry
+        console.error('[Webhook] ❌ ERRO CRÍTICO:', error);
+        console.error('[Webhook] Stack trace:', error.stack);
+        
+        // Ainda retorna 200 para evitar retry do MP
+        res.status(200).send('OK');
     }
 });
 
@@ -150,6 +334,60 @@ app.get('/api/protected', authMiddleware, (req, res) => {
             email: req.userEmail,
             name: req.userName
         }
+    });
+});
+
+// =====================================
+// SERVER-SENT EVENTS (SSE) - Notificações em tempo real
+// =====================================
+app.get('/api/events', authMiddleware, (req, res) => {
+    console.log(`[SSE] Nova conexão SSE solicitada pelo usuário ${req.userId}`);
+    
+    // Configurar headers para SSE
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'X-Accel-Buffering': 'no' // Desabilita buffering no nginx
+    });
+    
+    // Enviar evento inicial de conexão
+    res.write(`event: connected\ndata: ${JSON.stringify({ 
+        message: 'Conectado ao servidor de eventos',
+        userId: req.userId,
+        timestamp: new Date().toISOString()
+    })}\n\n`);
+    
+    // Adicionar conexão ao serviço de eventos
+    const connectionId = eventService.addConnection(req.userId.toString(), res);
+    
+    // Configurar heartbeat para manter conexão viva
+    const heartbeatInterval = setInterval(() => {
+        eventService.sendHeartbeat(req.userId.toString(), connectionId, res);
+    }, 30000); // A cada 30 segundos
+    
+    // Limpar quando a conexão for fechada
+    req.on('close', () => {
+        console.log(`[SSE] Conexão fechada: ${connectionId}`);
+        clearInterval(heartbeatInterval);
+        eventService.removeConnection(req.userId.toString(), connectionId);
+    });
+    
+    // Tratar erros
+    req.on('error', (error) => {
+        console.error(`[SSE] Erro na conexão ${connectionId}:`, error);
+        clearInterval(heartbeatInterval);
+        eventService.removeConnection(req.userId.toString(), connectionId);
+    });
+});
+
+// Endpoint para obter estatísticas das conexões SSE (admin)
+app.get('/api/events/stats', authMiddleware, (req, res) => {
+    const stats = eventService.getStats();
+    res.json({
+        success: true,
+        stats
     });
 });
 
