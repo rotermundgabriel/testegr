@@ -6,8 +6,6 @@
    "scripts": {
       "start": "node src/app.js",
       "dev": "nodemon src/app.js",
-      "init-db": "node src/services/database-init.js",
-      "update-db": "node src/services/database-init.js",
       "postinstall": "node src/services/database.js",
       "test": "node test-integration.js",
       "test-webhook": "node test-webhook.js"

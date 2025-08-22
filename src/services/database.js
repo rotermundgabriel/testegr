@@ -3,11 +3,6 @@ const path = require('path');
 const fs = require('fs');
 
 
-// Atualizar banco automaticamente ao iniciar
-console.log('CONFIRMAÇÃO QUE ISSO RODOU');
-require('./database-init');
-console.log('CONFIRMAÇÃO QUE ISSO RODOU');
-
 // Caminho do banco de dados (na raiz do projeto)
 const DB_PATH = path.join(__dirname, '..', '..', 'database.db');
 
@@ -217,10 +212,11 @@ function createOtherTables() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
 
   // Tabela de webhooks/notificações
+  // IMPORTANTE: link_id pode ser NULL para notificações de erro sem link associado
   db.exec(`
     CREATE TABLE IF NOT EXISTS payment_notifications (
       id TEXT PRIMARY KEY,
-      link_id TEXT, -- Permitir NULL para notificações de erro sem link associado
+      link_id TEXT,
       mp_notification_id TEXT,
       status TEXT,
       data TEXT,
