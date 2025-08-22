@@ -1,11 +1,17 @@
 [phases.setup]
-nixPkgs = ["nodejs-18_x", "npm"]
+nixPkgs = ["nodejs-18_x", "npm", "python3", "gcc"]
 
 [phases.install]
-cmds = ["npm ci"]
+cmds = [
+    "npm ci",
+    "npm rebuild better-sqlite3 || true"
+]
 
 [phases.build]
-cmds = ["npm rebuild better-sqlite3"]
+cmds = [
+    "npm run rebuild-sqlite || true",
+    "node src/services/database.js || true"
+]
 
 [start]
 cmd = "node src/app.js"

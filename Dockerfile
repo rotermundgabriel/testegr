@@ -1,15 +1,19 @@
 # Use Node.js 18.20.4 LTS
 FROM node:18.20.4-alpine
 
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++ 
+
 # Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies and rebuild native modules
-RUN npm ci --only=production && \
-    npm rebuild better-sqlite3
+# Install dependencies (including dev dependencies for build)
+RUN npm ci && \
+    npm rebuild better-sqlite3 && \
+    npm prune --production
 
 # Copy application files
 COPY . .

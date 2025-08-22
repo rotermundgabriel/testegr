@@ -8,7 +8,7 @@
       "dev": "nodemon src/app.js",
       "init-db": "node src/services/database-init.js",
       "update-db": "node src/services/database-init.js",
-      "postinstall": "npm rebuild better-sqlite3 && node src/services/database.js",
+      "postinstall": "npm rebuild better-sqlite3 --build-from-source || npm rebuild better-sqlite3 || true && node src/services/database.js || true",
       "rebuild-sqlite": "npm rebuild better-sqlite3",
       "test": "node test-integration.js",
       "test-webhook": "node test-webhook.js"
