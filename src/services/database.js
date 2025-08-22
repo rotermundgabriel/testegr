@@ -2,6 +2,8 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
+// Atualizar banco automaticamente ao iniciar
+require('./database-init');
 
 // Caminho do banco de dados (na raiz do projeto)
 const DB_PATH = path.join(__dirname, '..', '..', 'database.db');

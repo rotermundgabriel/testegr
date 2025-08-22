@@ -99,7 +99,7 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
             const { checkPaymentStatus } = require('./services/mercadopago');
             
             try {
-                // Buscar link pelo payment_id ou external_reference
+                // Buscar link pelo payment_id, external_reference ou mp_preference_id
                 console.log('[Webhook] Buscando link associado ao pagamento:', notification.data.id);
                 
                 const stmt = db.prepare(`
@@ -107,11 +107,15 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
                     FROM payment_links pl
                     JOIN users u ON pl.user_id = u.id
                     WHERE pl.payment_id = ? 
+                       OR pl.external_reference = ?
+                       OR pl.mp_preference_id = ?
                        OR pl.id = ?
                 `);
                 
                 const link = stmt.get(
-                    notification.data.id, 
+                    notification.data.id,
+                    notification.data.id,
+                    notification.data.id,
                     notification.data.id
                 );
                 
@@ -264,6 +268,7 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
                                 description: link.description,
                                 amount: paymentStatus.transactionAmount,
                                 payerEmail: paymentStatus.payerEmail,
+                                payerName: link.customer_name || 'Cliente',
                                 timestamp: new Date().toISOString()
                             });
                             
