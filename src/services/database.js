@@ -220,7 +220,7 @@ function createOtherTables() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS payment_notifications (
       id TEXT PRIMARY KEY,
-      link_id TEXT NOT NULL,
+      link_id TEXT, -- Permitir NULL para notificações de erro sem link associado
       mp_notification_id TEXT,
       status TEXT,
       data TEXT,

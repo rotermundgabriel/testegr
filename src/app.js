@@ -107,26 +107,24 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
                     FROM payment_links pl
                     JOIN users u ON pl.user_id = u.id
                     WHERE pl.payment_id = ? 
-                       OR pl.external_reference = ?
-                       OR pl.preference_id = ?
+                       OR pl.id = ?
                 `);
                 
                 const link = stmt.get(
                     notification.data.id, 
-                    notification.data.id,
                     notification.data.id
                 );
                 
                 if (!link) {
                     console.warn('[Webhook] Link não encontrado para payment_id:', notification.data.id);
                     
-                    // Tentar buscar pelo external_reference se fornecido
+                    // Tentar buscar pelo ID do link se fornecido no external_reference
                     if (notification.external_reference) {
                         const altStmt = db.prepare(`
                             SELECT pl.*, u.access_token 
                             FROM payment_links pl
                             JOIN users u ON pl.user_id = u.id
-                            WHERE pl.external_reference = ?
+                            WHERE pl.id = ?
                         `);
                         const altLink = altStmt.get(notification.external_reference);
                         
@@ -197,8 +195,7 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
                                 payment_id = ?,
                                 paid_at = ?,
                                 payer_email = ?,
-                                payment_method = ?,
-                                updated_at = CURRENT_TIMESTAMP
+                                payment_method = ?
                             WHERE id = ?
                         `);
                         
@@ -267,7 +264,6 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
                                 description: link.description,
                                 amount: paymentStatus.transactionAmount,
                                 payerEmail: paymentStatus.payerEmail,
-                                payerName: link.customer_name,
                                 timestamp: new Date().toISOString()
                             });
                             
@@ -283,16 +279,17 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
                 console.error('[Webhook] ❌ Erro ao processar pagamento:', error);
                 console.error('[Webhook] Stack trace:', error.stack);
                 
-                // Ainda assim, salvar a notificação para análise posterior
+                // Ainda assim, salvar a notificação para análise posterior (sem link_id se não encontrado)
                 try {
                     const errorStmt = db.prepare(`
                         INSERT INTO payment_notifications (id, link_id, mp_notification_id, status, data)
                         VALUES (?, ?, ?, ?, ?)
                     `);
                     
+                    // Usar NULL para link_id se não temos um link válido
                     errorStmt.run(
                         require('uuid').v4(),
-                        'error',
+                        null, // NULL ao invés de 'error' para não violar FOREIGN KEY
                         notification.id || notification.data?.id || 'unknown',
                         'error',
                         JSON.stringify({
@@ -302,6 +299,7 @@ app.post('/api/webhooks/mercadopago', async (req, res) => {
                             timestamp: new Date().toISOString()
                         })
                     );
+                    console.log('[Webhook] Notificação de erro salva para análise');
                 } catch (dbError) {
                     console.error('[Webhook] Erro ao salvar notificação de erro:', dbError);
                 }
