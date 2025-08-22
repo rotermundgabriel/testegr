@@ -67,13 +67,21 @@ app.use('/api/auth', authRoutes);
 // =====================================
 // WEBHOOK MERCADO PAGO (melhorado)
 // =====================================
-app.post('/api/webhooks/mercadopago', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/api/webhooks/mercadopago', async (req, res) => {
     try {
         console.log('[Webhook] ========== NOVA NOTIFICAÇÃO RECEBIDA ==========');
         console.log('[Webhook] Headers:', req.headers);
         
-        // Parse do body
-        const notification = JSON.parse(req.body.toString());
+        // Parse do body - lidar com string ou objeto
+        let notification;
+        if (typeof req.body === 'string') {
+            notification = JSON.parse(req.body);
+        } else if (Buffer.isBuffer(req.body)) {
+            notification = JSON.parse(req.body.toString());
+        } else {
+            notification = req.body;
+        }
+        
         console.log('[Webhook] Payload:', JSON.stringify(notification, null, 2));
         
         // Validar estrutura da notificação
