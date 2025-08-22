@@ -8,7 +8,8 @@
       "dev": "nodemon src/app.js",
       "init-db": "node src/services/database-init.js",
       "update-db": "node src/services/database-init.js",
-      "postinstall": "node src/services/database.js",
+      "postinstall": "npm rebuild better-sqlite3 && node src/services/database.js",
+      "rebuild-sqlite": "npm rebuild better-sqlite3",
       "test": "node test-integration.js",
       "test-webhook": "node test-webhook.js"
    },
@@ -27,6 +28,6 @@
       "nodemon": "^3.0.0"
    },
      "engines": {
-    "node": ">=18.0.0"
+    "node": "18.x"
   }
 }

@@ -1,0 +1,18 @@
+{
+  "name": "MP Payment Links",
+  "description": "Gerador de links de pagamento Mercado Pago",
+  "repository": "https://github.com/rotermundgabriel/testegr",
+  "keywords": ["node", "express", "mercadopago"],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "scripts": {
+    "postdeploy": "npm rebuild better-sqlite3"
+  },
+  "engines": {
+    "node": "18.20.4",
+    "npm": "10.7.0"
+  }
+}

@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: mp-payment-links
+    env: node
+    buildCommand: npm ci && npm rebuild better-sqlite3
+    startCommand: node src/app.js
+    envVars:
+      - key: NODE_VERSION
+        value: 18.20.4
